@@ -1,0 +1,40 @@
+module.exports = {
+  apps: [
+    {
+      name: 'pf-frontend',
+      script: 'kubectl',
+      args: 'port-forward -n homelabvpn svc/homelabvpn-frontend 3000:80 --address 0.0.0.0',
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      restart_delay: 3000,
+    },
+    {
+      name: 'pf-admin',
+      script: 'kubectl',
+      args: 'port-forward -n homelabvpn svc/homelabvpn-admin-web 3001:80 --address 0.0.0.0',
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      restart_delay: 3000,
+    },
+    {
+      name: 'pf-api',
+      script: 'kubectl',
+      args: 'port-forward -n homelabvpn svc/homelabvpn-api-svc 8080:80 --address 0.0.0.0',
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      restart_delay: 3000,
+    },
+    {
+      name: 'pf-wstunnel',
+      script: 'kubectl',
+      args: 'port-forward -n homelabvpn svc/wireguard-wstunnel-svc 8443:80 --address 0.0.0.0',
+      autorestart: true,
+      watch: false,
+      max_restarts: 50,
+      restart_delay: 3000,
+    },
+  ],
+};

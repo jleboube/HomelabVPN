@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homelabvpn
+  labels:
+    app.kubernetes.io/name: homelabvpn
+    app.kubernetes.io/component: vpn
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: homelabvpn-sa
+  namespace: homelabvpn
+  labels:
+    app.kubernetes.io/name: homelabvpn
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: homelabvpn-secrets
+  namespace: homelabvpn
+type: Opaque
+stringData:
+  database-url: "postgres://homelabvpn:zmHfDNL4VTmpAtJOotinVUhnnzXFLnYm@postgres-db:5432/homelabvpn?sslmode=disable"
+  redis-url: "redis://redis-svc:6379"
+  jwt-secret: "sYdn2xbW9xqWe304X6bKxBmowJ0ZjrozaytuJQS6cV2dWvsOhQybDkraKFPweJXX"
+  admin-jwt-secret: "26JZ5tJY9M9Pa5sPF9N6xJJQcerLMy9XUsRHXSFU6tLaXcetVR0PNuK4LcPoutor"
+  google-client-id: "placeholder"
+  google-client-secret: "placeholder"
+  stripe-secret-key: "sk_test_placeholder"
+  stripe-webhook-secret: "whsec_placeholder"
+  postgres-password: "zmHfDNL4VTmpAtJOotinVUhnnzXFLnYm"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homelabvpn-config
+  namespace: homelabvpn
+data:
+  ENVIRONMENT: "production"
+  FRONTEND_URL: "http://localhost:3000"
+  API_URL: "http://homelabvpn-api-svc"
+  GOOGLE_REDIRECT_URL: "http://localhost:8080/api/auth/google/callback"
+  WIREGUARD_INTERFACE: "wg0"
+  WIREGUARD_PORT: "51820"
+  ADMIN_EMAIL: "admin@vpn.local"
+  ADMIN_PASSWORD: "xjAezYoXMPW82zpw"

@@ -1,0 +1,56 @@
+version: '3.8'
+
+# HomelabVPN iOS Relay - Simplified Architecture
+# Peers are managed by the main HomelabVPN Admin UI
+# This relay syncs peers from the API and serves iOS clients
+
+services:
+  wireguard:
+    image: lscr.io/linuxserver/wireguard:latest
+    container_name: wireguard-relay
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - SERVERURL=${SERVER_URL:-ios-vpn.z-q.me}
+      - SERVERPORT=51820
+      # No auto-generated peers - all peers come from main API
+      - PEERS=0
+      - PEERDNS=1.1.1.1,8.8.8.8
+      - INTERNAL_SUBNET=10.100.0.0/24
+      - ALLOWEDIPS=0.0.0.0/0
+      - LOG_CONFS=true
+    volumes:
+      - ./config:/config
+      - /lib/modules:/lib/modules:ro
+    ports:
+      - 51820:51820/udp
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv4.ip_forward=1
+    restart: unless-stopped
+
+  # Peer sync service - shares network with WireGuard to access wg0 interface
+  peer-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.sync
+    container_name: peer-sync
+    # Share network namespace with WireGuard to access wg0 interface
+    network_mode: service:wireguard
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - API_URL=${API_URL:-https://api-vpn.z-q.me}
+      - RELAY_API_KEY=${RELAY_API_KEY}
+      - RELAY_NAME=${RELAY_NAME:-ios-relay-1}
+      - RELAY_REGION=${RELAY_REGION:-us-east}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-60}
+    volumes:
+      - ./config:/config
+    depends_on:
+      - wireguard
+    restart: unless-stopped

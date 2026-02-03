@@ -1,0 +1,21 @@
+# wstunnel sidecar for WireGuard UDP-over-WebSocket
+FROM alpine:3.19
+
+# Install dependencies
+RUN apk add --no-cache curl ca-certificates tar
+
+# Download and install wstunnel binary
+WORKDIR /tmp
+RUN curl -L -o wstunnel.tar.gz \
+    "https://github.com/erebe/wstunnel/releases/download/v10.5.1/wstunnel_10.5.1_linux_amd64.tar.gz" && \
+    tar -xzf wstunnel.tar.gz && \
+    mv wstunnel /usr/local/bin/wstunnel && \
+    chmod +x /usr/local/bin/wstunnel && \
+    rm -rf /tmp/*
+
+# Verify installation
+RUN wstunnel --version
+
+EXPOSE 8080
+
+ENTRYPOINT ["wstunnel"]

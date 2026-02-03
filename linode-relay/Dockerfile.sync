@@ -1,0 +1,14 @@
+FROM alpine:3.19
+
+RUN apk add --no-cache \
+    curl \
+    jq \
+    bash \
+    wireguard-tools
+
+COPY sync.sh /app/sync.sh
+RUN chmod +x /app/sync.sh
+
+WORKDIR /app
+
+CMD ["/app/sync.sh"]

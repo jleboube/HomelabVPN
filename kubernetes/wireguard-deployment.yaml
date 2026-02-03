@@ -1,0 +1,218 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wireguard-vpn
+  namespace: homelabvpn
+  labels:
+    app: wireguard
+    tier: vpn
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: wireguard
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: wireguard
+        tier: vpn
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      serviceAccountName: homelabvpn-sa
+      terminationGracePeriodSeconds: 30
+
+      initContainers:
+        - name: sysctl
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              sysctl -w net.ipv4.ip_forward=1
+              sysctl -w net.ipv4.conf.all.src_valid_mark=1
+          securityContext:
+            privileged: true
+
+      containers:
+        - name: wireguard
+          image: homelabvpn/wireguard:latest
+          imagePullPolicy: IfNotPresent
+
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - SYS_MODULE
+            privileged: true
+
+          ports:
+            - name: vpn
+              containerPort: 51820
+              protocol: UDP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+
+          env:
+            - name: WIREGUARD_INTERFACE
+              valueFrom:
+                configMapKeyRef:
+                  name: homelabvpn-config
+                  key: WIREGUARD_INTERFACE
+            - name: WIREGUARD_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: homelabvpn-config
+                  key: WIREGUARD_PORT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelabvpn-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: homelabvpn-secrets
+                  key: redis-url
+
+          volumeMounts:
+            - name: wireguard-config
+              mountPath: /etc/wireguard
+            - name: modules
+              mountPath: /lib/modules
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+        # wstunnel sidecar - tunnels WebSocket to WireGuard UDP
+        - name: wstunnel
+          image: homelabvpn/wstunnel:latest
+          imagePullPolicy: IfNotPresent
+
+          args:
+            - "server"
+            - "ws://0.0.0.0:8080"
+            - "--restrict-to"
+            - "127.0.0.1:51820"
+
+          ports:
+            - name: websocket
+              containerPort: 8080
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          livenessProbe:
+            tcpSocket:
+              port: websocket
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          readinessProbe:
+            tcpSocket:
+              port: websocket
+            initialDelaySeconds: 3
+            periodSeconds: 5
+
+      volumes:
+        - name: wireguard-config
+          emptyDir: {}
+        - name: modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - wireguard
+                topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wireguard-vpn-svc
+  namespace: homelabvpn
+  labels:
+    app: wireguard
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: wireguard
+  ports:
+    - name: vpn
+      port: 51820
+      targetPort: vpn
+      protocol: UDP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP
+
+---
+# Separate service for wstunnel WebSocket (for Cloudflare tunnel)
+apiVersion: v1
+kind: Service
+metadata:
+  name: wireguard-wstunnel-svc
+  namespace: homelabvpn
+  labels:
+    app: wireguard
+spec:
+  type: ClusterIP
+  selector:
+    app: wireguard
+  ports:
+    - name: websocket
+      port: 80
+      targetPort: websocket
+      protocol: TCP
