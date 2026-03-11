@@ -65,3 +65,6 @@ coverage/
 tmp/
 temp/
 *.tmp
+# Files blocked by secret scanner - DO NOT REMOVE
+docker-compose.yml
+kubernetes/namespace.yaml
